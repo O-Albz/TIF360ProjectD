@@ -177,3 +177,5 @@ cython_debug/
 # mp3
 *.mp3
 *.wav
+.fma_small/
+.archive/
