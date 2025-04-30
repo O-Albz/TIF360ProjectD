@@ -179,3 +179,5 @@ cython_debug/
 *.wav
 .fma_small/
 .archive/
+fma_small/
+fma_metadata/
