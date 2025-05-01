@@ -11,7 +11,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.b
 
 
 class ConvCVAE(nn.Module):
-    def __init__(self, latent_size = 5, num_classes = 10, device = 'auto'): #for spectro 128,163
+    def __init__(self, latent_size = 2, num_classes = 10, device = 'auto'): #for spectro 128,163
         super(ConvCVAE, self).__init__()
         self.latent_size = latent_size
         self.num_classes = num_classes
@@ -24,16 +24,16 @@ class ConvCVAE(nn.Module):
         # self.encoder_conv4 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
         # self.encoder_conv5 = nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1)
         # self.linear1 = nn.Linear(128 * 12 * 12, 500) # input is 513 x 862 --> TODO
-        self.encoder_fc1 = nn.Linear(64 * 7 * 7, 200)
+        self.encoder_fc1 = nn.Linear(64 * 7 * 7, 100)
         
-        self.encoder_fc_mu = nn.Linear(200, latent_size)
-        self.encoder_fc_logvar = nn.Linear(200, latent_size)
+        self.encoder_fc_mu = nn.Linear(100, latent_size)
+        self.encoder_fc_logvar = nn.Linear(100, latent_size)
 
         # Decoder
         # self.decoder_fc1 = nn.Linear(latent_size + num_classes, 500)
         # self.decoder_fc2 = nn.Linear(500, 128 * 12 * 12) # change to correct size TODO
-        self.decoder_fc1 = nn.Linear(latent_size + num_classes, 200)
-        self.decoder_fc2 = nn.Linear(200, 64 * 7 * 7) # change to correct size TODO
+        self.decoder_fc1 = nn.Linear(latent_size + num_classes, 100)
+        self.decoder_fc2 = nn.Linear(100, 64 * 7 * 7) # change to correct size TODO
         # self.encoder_conv1 = nn.ConvTranspose2d(512, 256, kernel_size=3, stride=1, padding=1)
         # self.encoder_conv2 = nn.ConvTranspose2d(256, 128, kernel_size=3, stride=1, padding=1)
         # self.decoder_conv3 = nn.ConvTranspose2d(128, 64, kernel_size=3, stride=1, padding=1)
@@ -96,10 +96,11 @@ class ConvCVAE(nn.Module):
         # sys.stdout.flush()
 
         pred = self.decoder(z)
+
         return pred, mu, logvar
     
-    def loss_function(self, recon_x, x, mu, logvar, alpha = 1, beta = 1):
-        BCE = F.binary_cross_entropy_with_logits(recon_x, x, reduction='sum')     
+    def loss_function(self, recon_x, x, mu, logvar, alpha = 1, beta = 0.1):
+        BCE = F.mse_loss(recon_x, x, reduction='sum') # prop use sigmoid if BCE shold be used
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         return alpha * BCE + beta * KLD
     
@@ -108,14 +109,15 @@ class ConvCVAE(nn.Module):
         # y = torch.ones(z.shape).to(device) * y
         # z = torch.cat((z, y), dim=1)
 
-        z = torch.cat((z, labels.float()), dim=1)
+        labels = F.one_hot(labels, num_classes=self.num_classes).float()
+        z = torch.cat((z, labels), dim=1)
 
         return self.decoder(z)
         
         
 class ConvCVAEPL(pl.LightningModule):
     # def __init__(self, latent_size = 128, num_classes = 163, device = 'auto'):
-    def __init__(self, latent_size = 5, num_classes = 10, device = 'auto'):
+    def __init__(self, latent_size = 2, num_classes = 10, device = 'auto'):
         super(ConvCVAEPL, self).__init__()
         self.model = ConvCVAE(latent_size, num_classes, device)
         
@@ -135,7 +137,7 @@ class ConvCVAEPL(pl.LightningModule):
         # recon_batch, mu, logvar = self(x, labels)
 
         loss = self.model.loss_function(recon_batch, x, mu, logvar)
-        self.log('train_loss', loss)
+        self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -144,7 +146,7 @@ class ConvCVAEPL(pl.LightningModule):
         labels = labels.to(device)
         recon_batch, mu, logvar = self.model(x, labels)
         loss = self.model.loss_function(recon_batch, x, mu, logvar)
-        self.log('val_loss', loss)
+        self.log('val_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
     
     def test_step(self, batch, batch_idx):
@@ -153,11 +155,10 @@ class ConvCVAEPL(pl.LightningModule):
         labels = labels.to(device)
         recon_batch, mu, logvar = self.model(x, labels)
         loss = self.model.loss_function(recon_batch, x, mu, logvar)
-        self.log('test_loss', loss)
+        self.log('test_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
     
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         return optimizer
-        
-        
+    
