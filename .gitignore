@@ -181,3 +181,10 @@ cython_debug/
 .archive/
 fma_small/
 fma_metadata/
+
+# logs
+logs/
+lightning_logs/
+
+# datasets
+data/
