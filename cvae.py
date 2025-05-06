@@ -44,9 +44,9 @@ class ConvCVAE(nn.Module):
         # class conditioning
         # y = torch.argmax(labels, dim=1).reshape((x.shape[0], 1, 1, 1))
         # TODO maybe better to use one-hot encoding for labels (i.e. one feature map for each class)
-        y = labels.view((x.shape[0], 1, 1, 1)) # Into shape (batch_size, 1, 1, 1)
+        y = labels.view((x.shape[0], 1, 1, 1)).to(device) # Into shape (batch_size, 1, 1, 1)
         y = torch.ones(x.shape).to(device) * y # Into shape (batch_size, 1, H, W) all elements = y
-
+        x = x.to(device)
         x = torch.cat((x, y), dim=1)
 
         x = F.relu(self.encoder_conv1(x))
@@ -61,6 +61,7 @@ class ConvCVAE(nn.Module):
         logvar = self.encoder_fc_logvar(x)
         return mu, logvar
     
+
     def unFlatten(self, x):
         return x.reshape(x.shape[0], 64, 7, 7)
     
@@ -97,9 +98,9 @@ class ConvCVAE(nn.Module):
 
         pred = self.decoder(z)
 
-        return pred, mu, logvar
+        return pred, mu, logvar        
     
-    def loss_function(self, recon_x, x, mu, logvar, alpha = 1, beta = 0.1):
+    def loss_function(self, recon_x, x, mu, logvar, alpha = 1, beta = 1):
         BCE = F.mse_loss(recon_x, x, reduction='sum') # prop use sigmoid if BCE shold be used
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         return alpha * BCE + beta * KLD
@@ -108,8 +109,8 @@ class ConvCVAE(nn.Module):
         # y = torch.argmax(labels, dim=1).reshape((z.shape[0], 1, 1, 1))
         # y = torch.ones(z.shape).to(device) * y
         # z = torch.cat((z, y), dim=1)
-
-        labels = F.one_hot(labels, num_classes=self.num_classes).float()
+        z = z.to(device)
+        labels = F.one_hot(labels, num_classes=self.num_classes).float().to(device)
         z = torch.cat((z, labels), dim=1)
 
         return self.decoder(z)
