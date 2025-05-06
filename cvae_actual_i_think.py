@@ -44,15 +44,17 @@ class ConvCVAE(nn.Module):
     def encoder(self, x, labels):
         # class conditioning
         # y = torch.argmax(labels, dim=1).reshape((x.shape[0], 1, 1, 1))
-        # TODO maybe better to use one-hot encoding for labels (i.e. one feature map for each class)
-        y_onehot = F.one_hot(labels, num_classes=self.num_classes).float()
-        y_maps = y_onehot.unsqueeze(2).unsqueeze(3)
-        y_maps = y_maps.expand(-1, -1, x.shape[2], x.shape[3]).to(device)
-        print("y_maps shape", y_maps.shape)
-        print("x shape", x.shape)
-        sys.stdout.flush()
+
+        # One-hot encode labels
+        y_onehot = F.one_hot(labels, num_classes=self.num_classes).float() # [batch_size, num_classes]
+        y_maps = y_onehot.unsqueeze(2).unsqueeze(3) # [B, C, 1, 1]
+        y_maps = y_maps.expand(-1, -1, x.shape[2], x.shape[3]).to(device) # [B, C, H, W]
+
+        # print("y_maps shape", y_maps.shape)
+        # print("x shape", x.shape)
+        # sys.stdout.flush()
         
-        x = torch.cat((x, y_maps), dim=1).to(device)
+        x = torch.cat((x, y_maps), dim=1).to(device) # [B, C+num_classes, H, W]
 
         x = F.relu(self.encoder_conv1(x))
         x = F.relu(self.encoder_conv2(x))
@@ -123,9 +125,15 @@ class ConvCVAE(nn.Module):
         
 class ConvCVAEPL(pl.LightningModule):
     # def __init__(self, latent_size = 128, num_classes = 163, device = 'auto'):
-    def __init__(self, latent_size = 2, num_classes = 10, device = 'auto'):
+    def __init__(self, latent_size = 2, num_classes = 17, device = 'auto'):
         super(ConvCVAEPL, self).__init__()
         self.model = ConvCVAE(latent_size, num_classes, device)
+
+    def on_train_epoch_start(self):
+        # Slowly increase beta
+        ramp_period = 20
+        self.beta = float(1 / (1 + torch.exp(torch.tensor(-2 * (self.current_epoch - ramp_period)))))
+        self.print(f"Beta = {self.beta:.3f}")
         
     def forward(self, x, labels):
         # print("ConvCVAEPL forward called")
