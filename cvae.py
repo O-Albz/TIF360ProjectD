@@ -18,7 +18,7 @@ class ConvCVAE(nn.Module):
         self.device = device
 
         # Encoder
-        self.encoder_conv1 = nn.Conv2d(2, 32, kernel_size=4, stride=2, padding=1)
+        self.encoder_conv1 = nn.Conv2d(1 + num_classes, 32, kernel_size=4, stride=2, padding=1)
         self.encoder_conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1)
         # self.encoder_conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
         # self.encoder_conv4 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
@@ -42,12 +42,19 @@ class ConvCVAE(nn.Module):
         
     def encoder(self, x, labels):
         # class conditioning
-        # y = torch.argmax(labels, dim=1).reshape((x.shape[0], 1, 1, 1))
         # TODO maybe better to use one-hot encoding for labels (i.e. one feature map for each class)
-        y = labels.view((x.shape[0], 1, 1, 1)) # Into shape (batch_size, 1, 1, 1)
-        y = torch.ones(x.shape).to(device) * y # Into shape (batch_size, 1, H, W) all elements = y
+        # One-hot encode labels
+        y_onehot = F.one_hot(labels, num_classes=self.num_classes).float() # [batch_size, num_classes]
 
-        x = torch.cat((x, y), dim=1)
+        y_maps = y_onehot.unsqueeze(2).unsqueeze(3)  # [B, C, 1, 1]
+        y_maps = y_maps.expand(-1, -1, x.shape[2], x.shape[3])  # [B, C, H, W]
+
+        x = torch.cat((x, y_maps), dim=1)  # [B, C+num_classes, H, W]
+
+
+        # y = labels.view((x.shape[0], 1, 1, 1)) # Into shape (batch_size, 1, 1, 1)
+        # y = torch.ones(x.shape).to(device) * y # Into shape (batch_size, 1, H, W) all elements = y
+        # x = torch.cat((x, y), dim=1)
 
         x = F.relu(self.encoder_conv1(x))
         x = F.relu(self.encoder_conv2(x))
@@ -99,7 +106,7 @@ class ConvCVAE(nn.Module):
 
         return pred, mu, logvar
     
-    def loss_function(self, recon_x, x, mu, logvar, alpha = 1, beta = 0.1):
+    def loss_function(self, recon_x, x, mu, logvar, alpha = 1, beta=0.1):
         BCE = F.mse_loss(recon_x, x, reduction='sum') # prop use sigmoid if BCE shold be used
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         return alpha * BCE + beta * KLD
@@ -120,6 +127,12 @@ class ConvCVAEPL(pl.LightningModule):
     def __init__(self, latent_size = 2, num_classes = 10, device = 'auto'):
         super(ConvCVAEPL, self).__init__()
         self.model = ConvCVAE(latent_size, num_classes, device)
+
+    def on_train_epoch_start(self):
+        # Slowly increase beta
+        ramp_period = 20
+        self.beta = float(1 / (1 + torch.exp(torch.tensor(-2 * (self.current_epoch - ramp_period)))))
+        self.print(f"Beta = {self.beta:.3f}")
         
     def forward(self, x, labels):
         # print("ConvCVAEPL forward called")
@@ -136,7 +149,7 @@ class ConvCVAEPL(pl.LightningModule):
         recon_batch, mu, logvar = self.model(x, labels)
         # recon_batch, mu, logvar = self(x, labels)
 
-        loss = self.model.loss_function(recon_batch, x, mu, logvar)
+        loss = self.model.loss_function(recon_batch, x, mu, logvar, beta=self.beta)
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
     
