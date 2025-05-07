@@ -11,7 +11,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.b
 
 
 class ConvCVAE(nn.Module):
-    def __init__(self, latent_size = 2, num_classes = 17, device = 'auto'): #for spectro 128,163
+    def __init__(self, latent_size = 30, num_classes = 17, device = 'auto'): #for spectro 128,163
         super(ConvCVAE, self).__init__()
         self.latent_size = latent_size
         self.num_classes = num_classes
@@ -20,12 +20,12 @@ class ConvCVAE(nn.Module):
         # Encoder
         self.encoder_conv1 = nn.Conv2d(2 + num_classes, 32, kernel_size=4, stride=2, padding=1)
         self.encoder_conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1)
-        # self.encoder_conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
-        # self.encoder_conv4 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
+        self.encoder_conv3 = nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1)
+        self.encoder_conv4 = nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1)
         # self.encoder_conv5 = nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1)
         # self.linear1 = nn.Linear(128 * 12 * 12, 500) # input is 513 x 862 --> TODO
         
-        self.encoder_fc1 = nn.Linear(64 * 215 * 128, 100)
+        self.encoder_fc1 = nn.Linear(256 * 53 * 32, 100)
         
         self.encoder_fc_mu = nn.Linear(100, latent_size)
         self.encoder_fc_logvar = nn.Linear(100, latent_size)
@@ -34,12 +34,13 @@ class ConvCVAE(nn.Module):
         # self.decoder_fc1 = nn.Linear(latent_size + num_classes, 500)
         # self.decoder_fc2 = nn.Linear(500, 128 * 12 * 12) # change to correct size TODO
         self.decoder_fc1 = nn.Linear(latent_size + num_classes, 100)
-        self.decoder_fc2 = nn.Linear(100, 64 * 215 * 128) # change to correct size TODO
-        # self.encoder_conv1 = nn.ConvTranspose2d(512, 256, kernel_size=3, stride=1, padding=1)
-        # self.encoder_conv2 = nn.ConvTranspose2d(256, 128, kernel_size=3, stride=1, padding=1)
+        self.decoder_fc2 = nn.Linear(100, 256 * 53 * 32) # change to correct size TODO
         # self.decoder_conv3 = nn.ConvTranspose2d(128, 64, kernel_size=3, stride=1, padding=1)
-        self.decoder_conv1 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1)
-        self.decoder_conv2 = nn.ConvTranspose2d(32, 2, kernel_size=4, stride=2, padding=1, output_padding=(1,2))
+        self.decoder_conv1 = nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
+        self.decoder_conv2 = nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
+        self.decoder_conv3 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
+        self.decoder_conv4 = nn.ConvTranspose2d(32, 2, kernel_size=4, stride=2, padding=1, output_padding=(1,0))#, output_padding=(1,1)
+        
         
     def encoder(self, x, labels):
         # class conditioning
@@ -55,13 +56,24 @@ class ConvCVAE(nn.Module):
         # sys.stdout.flush()
         
         x = torch.cat((x, y_maps), dim=1).to(device) # [B, C+num_classes, H, W]
-
+        # print("Encoder \n Conv input shape:", x.shape)
+        # sys.stdout.flush()
         x = F.relu(self.encoder_conv1(x))
+        # print("Conv1 output shape:", x.shape)
+        # sys.stdout.flush()
         x = F.relu(self.encoder_conv2(x))
-        # x = F.relu(self.encoder_conv3(x))
-        # x = F.relu(self.encoder_conv4(x))
+        # print("Conv2 output shape:", x.shape)
+        # sys.stdout.flush()
+        x = F.relu(self.encoder_conv3(x))
+        # print("Conv3 output shape:", x.shape)
+        # sys.stdout.flush()
+        x = F.relu(self.encoder_conv4(x))
+        # print("Conv4 output shape:", x.shape)
+        # sys.stdout.flush()
         # x = F.relu(self.encoder_conv5(x))
         x = x.view(x.size(0), -1)
+        # print("output shape:", x.shape)
+        # sys.stdout.flush()
         x = F.relu(self.encoder_fc1(x))
 
         mu = self.encoder_fc_mu(x)
@@ -70,7 +82,7 @@ class ConvCVAE(nn.Module):
     
 
     def unFlatten(self, x):
-        return x.reshape(x.shape[0], 64, 128, 215)
+        return x.reshape(x.shape[0], 256, 32, 53)
     
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -78,13 +90,27 @@ class ConvCVAE(nn.Module):
         return mu + eps * std
     
     def decoder(self, z):
+        # print("Decoder \n linear input shape:", z.shape)
+        # sys.stdout.flush()
         z = F.relu(self.decoder_fc1(z))
         z = F.relu(self.decoder_fc2(z))
+        # print("linear shape:", z.shape)
+        # sys.stdout.flush()
         xdot = self.unFlatten(z)
+        # print("Flatt:", z.shape)
+        # sys.stdout.flush()
         xdot = F.relu(self.decoder_conv1(xdot))
+        # print("Conv1 output shape:", xdot.shape)
+        # sys.stdout.flush()
         xdot = F.relu(self.decoder_conv2(xdot))
-        # z = F.relu(self.decoder_conv3(z))
-        # z = F.relu(self.decoder_conv4(z))
+        # print("Conv2 output shape:", xdot.shape)
+        # sys.stdout.flush()
+        xdot = F.relu(self.decoder_conv3(xdot))
+        # print("Conv3 output shape:", xdot.shape)
+        # sys.stdout.flush()
+        xdot = F.relu(self.decoder_conv4(xdot))
+        # print("Conv4 output shape:", xdot.shape)
+        # sys.stdout.flush()
         # z = F.relu(self.decoder_conv5(z))
         return xdot
     
@@ -125,7 +151,7 @@ class ConvCVAE(nn.Module):
         
 class ConvCVAEPL(pl.LightningModule):
     # def __init__(self, latent_size = 128, num_classes = 163, device = 'auto'):
-    def __init__(self, latent_size = 2, num_classes = 17, device = 'auto'):
+    def __init__(self, latent_size = 30, num_classes = 17, device = 'auto'):
         super(ConvCVAEPL, self).__init__()
         self.model = ConvCVAE(latent_size, num_classes, device)
 
