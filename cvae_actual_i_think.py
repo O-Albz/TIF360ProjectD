@@ -143,8 +143,9 @@ class ConvCVAE(nn.Module):
         # y = torch.ones(z.shape).to(device) * y
         # z = torch.cat((z, y), dim=1)
         z = z.to(device)
-        labels = F.one_hot(labels, num_classes=self.num_classes).float().to(device)
-        z = torch.cat((z, labels), dim=1)
+        labels = labels.to(torch.long).to(device)
+        one_hot_labels = F.one_hot(labels, num_classes=self.num_classes).float()
+        z = torch.cat((z, one_hot_labels), dim=1)
 
         return self.decoder(z)
         
@@ -157,8 +158,13 @@ class ConvCVAEPL(pl.LightningModule):
 
     def on_train_epoch_start(self):
         # Slowly increase beta
-        ramp_period = 20
-        self.beta = float(1 / (1 + torch.exp(torch.tensor(-2 * (self.current_epoch - ramp_period)))))
+        # ramp_period = 50
+        # max_beta = 1
+        # self.beta = torch.minimum(torch.exp(torch.tensor(0.1*(self.current_epoch-ramp_period))), torch.tensor(max_beta))
+
+        ramp_period = 25
+        amplitude = 0.15
+        self.beta = float(1 / (1 + torch.exp(torch.tensor(-amplitude * (self.current_epoch - ramp_period)))))
         self.print(f"Beta = {self.beta:.3f}")
         
     def forward(self, x, labels):
