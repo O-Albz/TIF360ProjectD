@@ -40,8 +40,8 @@ class ConvCVAE(nn.Module):
 
         # make each latent_size + num_classes into a 16x26 image instead of above 
 
-        # self.decoder_conv1 = nn.ConvTranspose2d(latent_size + num_classes, 256, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
-        self.decoder_conv1 = nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
+        self.decoder_conv1 = nn.ConvTranspose2d(latent_size + num_classes, 128, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
+        #self.decoder_conv1 = nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
         self.decoder_conv2 = nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
         self.decoder_conv3 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
         self.decoder_conv4 = nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
@@ -112,11 +112,11 @@ class ConvCVAE(nn.Module):
         # print("z2 shape: ", z.shape)
         # sys.stdout.flush()
 
-        z = F.leaky_relu(self.decoder_fc(z))  # shape: [B, 512 * 16 * 26]
-        z = z.view(-1, 256, 16, 26)     # shape: [B, 512, 16, 26]
+        # z = F.leaky_relu(self.decoder_fc(z))  # shape: [B, 512 * 16 * 26]
+        # z = z.view(-1, 256, 16, 26)     # shape: [B, 512, 16, 26]
 
-        # z = z.unsqueeze(-1).unsqueeze(-1)
-        # z = z.repeat(1, 1, 16, 26)
+        z = z.unsqueeze(-1).unsqueeze(-1)
+        z = z.repeat(1, 1, 16, 26)
 
         # print("z3 shape: ", z.shape)
         # sys.stdout.flush()
@@ -130,7 +130,7 @@ class ConvCVAE(nn.Module):
         
     
     def loss_function(self, recon_x, x, mu, logvar, alpha = 1):
-        BCE = F.mse_loss(recon_x, x, reduction='sum') 
+        BCE = F.mse_loss(recon_x, x, reduction='mean') 
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) 
         return alpha * BCE + self.beta * KLD, BCE, KLD
     
@@ -141,9 +141,12 @@ class ConvCVAE(nn.Module):
         one_hot_labels = F.one_hot(labels, num_classes=self.num_classes).float().to(device)
         z = torch.cat((z, one_hot_labels), dim=1)
 
-        z = F.leaky_relu(self.decoder_fc(z))  # shape: [B, 512 * 16 * 26]
-        z = z.view(-1, 256, 16, 26)     # shape: [B, 512, 16, 26]
-        
+        # z = F.leaky_relu(self.decoder_fc(z))  # shape: [B, 512 * 16 * 26]
+        # z = z.view(-1, 256, 16, 26)     # shape: [B, 512, 16, 26]
+
+        z = z.unsqueeze(-1).unsqueeze(-1)
+        z = z.repeat(1, 1, 16, 26)
+
         return self.decoder(z)
 
 
@@ -157,11 +160,11 @@ class ConvCVAEPL(pl.LightningModule):
 
     def on_train_epoch_start(self):
         # Slowly increase beta
-        xshift = 0
-        yamp = 0.01
-        xamp = 0.15
-        max_beta = 10
-        self.beta = torch.minimum(yamp * torch.exp(torch.tensor(xamp * (self.current_epoch - xshift))), torch.tensor(max_beta))
+        ramp_period = 40
+        amp1 = 0.005
+        amp2 = 0.15
+        max_beta = 1
+        self.beta = torch.minimum(amp1 * torch.exp(torch.tensor(amp2 * (self.current_epoch - ramp_period))), torch.tensor(max_beta))
         
         # ramp_period = 25
         # amplitude = 0.15
@@ -198,17 +201,3 @@ class ConvCVAEPL(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
-    
-    def on_train_epoch_end(self):
-        metrics = self.trainer.callback_metrics
-        train_loss = metrics.get("train_loss")
-        train_recon = metrics.get("train_recon")
-        train_KLD = metrics.get("train_KLD")
-        val_loss = metrics.get("val_loss")
-
-        if all(m is not None for m in [train_loss, train_recon, train_KLD, val_loss]):
-            self.print(
-                f"[Epoch {self.current_epoch}] "
-                f"Train Loss: {train_loss:.4f}, Recon: {train_recon:.4f}, KLD: {train_KLD:.4f} "
-                f", Val Loss: {val_loss:.4f}"
-            )
