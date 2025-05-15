@@ -57,13 +57,19 @@ class ConvCVAE(nn.Module):
         y_onehot = F.one_hot(labels, num_classes=self.num_classes).float()
         y_maps = y_onehot.unsqueeze(2).unsqueeze(3).expand(-1, -1, x.shape[2], x.shape[3]).to(device)
         x = torch.cat((x, y_maps), dim=1)
+
         x = F.leaky_relu(self.encoder_conv1(x))
+        x = self.max_pool1(x)
         x = self.dropout_conv(x)
         x = F.leaky_relu(self.encoder_conv2(x))
+        x = self.max_pool2(x)
         x = F.leaky_relu(self.encoder_conv3(x))
+        x = self.max_pool3(x)
         x = self.dropout_conv(x)
         x = F.leaky_relu(self.encoder_conv4(x))
+        x = self.max_pool4(x)
         x = F.leaky_relu(self.encoder_conv5(x))
+
         x = self.adaptive_pool(x)
         x = x.view(x.shape[0], -1)
 
@@ -109,8 +115,9 @@ class ConvCVAE(nn.Module):
         
     
     def loss_function(self, recon_x, x, mu, logvar, alpha = 1):
-        BCE = F.mse_loss(recon_x, x, reduction='sum') 
-        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) 
+        BCE = F.mse_loss(recon_x, x, reduction='sum') / x.size(0)
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        KLD = KLD / x.size(0)
         return alpha * BCE + self.beta * KLD, BCE, KLD
     
     def sample(self, z, labels):
@@ -135,18 +142,20 @@ class ConvCVAEPL(pl.LightningModule):
     def on_train_epoch_start(self):
         # Slowly increase beta
         xshift = 0
-        yamp = 0.01
+        yamp = 0.1
         xamp = 0.15
-        max_beta = 10
+        max_beta = 2
         self.beta = torch.minimum(yamp * torch.exp(torch.tensor(xamp * (self.current_epoch - xshift))), torch.tensor(max_beta))
-        
+
         # ramp_period = 25
         # amplitude = 0.15
         # self.beta = float(1 / (1 + torch.exp(torch.tensor(-amplitude * (self.current_epoch - ramp_period)))))
-        self.print(f"Beta = {self.beta:.5f}")
+        
+        self.model.beta = self.beta
+        # self.print(f"Beta = {self.beta:.5f}")
+        self.log('beta', self.model.beta, prog_bar=True, on_epoch=True)
         
     def forward(self, x, labels):
-        # print("ConvCVAEPL forward called")
         return self.model(x, labels)
     
     def training_step(self, batch, batch_idx):
@@ -184,10 +193,11 @@ class ConvCVAEPL(pl.LightningModule):
         train_recon = metrics.get("train_recon")
         train_KLD = metrics.get("train_KLD")
         val_loss = metrics.get("val_loss")
+        beta = metrics.get("beta")
 
         if all(m is not None for m in [train_loss, train_recon, train_KLD, val_loss]):
             self.print(
-                f"[Epoch {self.current_epoch}] "
+                f"[Epoch {self.current_epoch}], Beta: {beta:.4f}, "
                 f"Train Loss: {train_loss:.4f}, Recon: {train_recon:.4f}, KLD: {train_KLD:.4f} "
                 f", Val Loss: {val_loss:.4f}"
             )
