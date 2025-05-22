@@ -1,24 +1,26 @@
-# 🎵 TIF360ProjectD: Clustering and Music Generation with CVAEs
+# TIF360ProjectD: Clustering and Music Generation with CVAEs
 
-This project was developed as part of the **TIF360** course and explores the use of **Conditional Variational Autoencoders (CVAEs)** to cluster and generate music from latent representations. The aim is to better understand how structured latent spaces can be used for creative audio synthesis.
+## Overview
 
----
+This project explores AI-driven music generation using a **β-Conditional Variational Autoencoder (β-CVAE)** trained on spectrograms. The model learns a structured latent space conditioned on music genre, enabling controlled generation of genre-specific audio clips.
 
-## 🚀 Overview
+## Objective
 
-We implement a CVAE architecture to learn latent embeddings of musical audio and explore how different regions of the latent space can be used to generate distinct audio samples. This includes:
-
-- Preprocessing musical clips to spectrograms
-- Training a CVAE to map these features to a structured latent space.
-- Generating new music samples by decoding from various latent points.
+- Learn meaningful latent representations of music.
+- Enable **genre-conditioned generation** of spectrograms.
+- Evaluate β-CVAE's effectiveness for clustering and synthesis compared to other autoencoder variants.
 
 ---
 
-## 🎧 Audio Examples
+## Audio Examples
 
 Here are some audio samples generated from different regions of the latent space:
 #### Rock
-(https://github.com/user-attachments/assets/8287aa19-7307-4e9d-b9c6-1cd9f8a79c65)
+
+
+https://github.com/user-attachments/assets/b60f8e11-0635-4334-99db-e0878f605a90
+
+
 #### Pop
 
 #### Classical
@@ -27,31 +29,29 @@ Here are some audio samples generated from different regions of the latent space
 
 ---
 
-## 📂 Project Structure
+## Project Structure
+
+```
 TIF360ProjectD/
-├── models/                    # Model definitions and training scripts
-│   └── cvae.py                # CVAE model in Pytorch Lightning
-│
+├── models/                     # Model definitions and training scripts
+│   └── cvae.py                # CVAE model in PyTorch Lightning
 ├── utils/                     # Utility data to handle data conversion
 │   ├── labelconversion.csv    # Conversion mapping from file name to genre
 │   └── labelencoding.csv      # Conversion mapping from label to one-hot encoding
-│
 ├── audio_samples/             # Generated audio clips for listening
-│
 ├── notebooks/                 # Jupyter notebook for running the model
 │   └── CVAE_Music_Generation.ipynb
-│
 ├── outputs/                   # Model checkpoints and path to final model
-│   ├── checkpoints/
+├── checkpoints/
 │   └── model_path/
-│
 ├── requirements.txt           # Python dependencies
 ├── README.md                  # Project overview
 └── LICENSE                    # Open source license
+```
 
 ---
 
-## 🧠 Key Technologies
+## Key Technologies
 
 - Python
 - PyTorch
