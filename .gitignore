@@ -187,3 +187,6 @@ lightning_logs/
 
 # datasets
 data/
+
+# mac
+.DS_STORE
