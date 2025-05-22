@@ -5,6 +5,8 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 import sys
+import librosa
+import IPython.display as ipd
 # from sklearn.model_selection import train_test_split
 
 device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
@@ -21,31 +23,42 @@ class ConvCVAE(nn.Module):
         # Encoder
         self.encoder_conv1 = nn.Conv2d(2 + num_classes, 32, kernel_size=3, stride=1, padding=1)
         self.max_pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.encoder_conv2 = nn.Conv2d(32, 48, kernel_size=3, stride=1, padding=1)
-        self.max_pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.encoder_conv3 = nn.Conv2d(48, 64, kernel_size=3, stride=1, padding=1)
-        self.max_pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.encoder_conv4 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
-        self.max_pool4 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.encoder_conv5 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
+        self.encoder_batch_norm1 = nn.BatchNorm2d(32)
 
-        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.encoder_conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.max_pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.encoder_batch_norm2 = nn.BatchNorm2d(64)
+
+        self.encoder_conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+        self.max_pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.encoder_batch_norm3 = nn.BatchNorm2d(128)
+
+        self.encoder_conv4 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
+        self.max_pool4 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.encoder_batch_norm4 = nn.BatchNorm2d(256)
+
+        self.encoder_conv5 = nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1)
+
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((2, 2))
         
-        
-        self.encoder_fc_mu = nn.Linear(256, latent_size)
-        self.encoder_fc_logvar = nn.Linear(256, latent_size)
+        self.encoder_fc_mu = nn.Linear(512 * 2 * 2, latent_size)
+        self.encoder_fc_logvar = nn.Linear(512 * 2 * 2, latent_size)
 
         # Decoder
-        self.decoder_fc = nn.Linear(latent_size + num_classes, 256 * 16 * 26)
+        self.decoder_fc = nn.Linear(latent_size + num_classes, 512 * 16 * 26)
 
         # make each latent_size + num_classes into a 16x26 image instead of above 
 
         # self.decoder_conv1 = nn.ConvTranspose2d(latent_size + num_classes, 256, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
-        self.decoder_conv1 = nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
-        self.decoder_conv2 = nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
-        self.decoder_conv3 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
-        self.decoder_conv4 = nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
-        self.decoder_conv5 = nn.ConvTranspose2d(16, 2, kernel_size=4, stride=2, padding=1, output_padding=(1,0))#, output_padding=(1,1)
+        self.decoder_conv1 = nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
+        self.decoder_batch_norm1 = nn.BatchNorm2d(256)
+        self.decoder_conv2 = nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
+        self.decoder_batch_norm2 = nn.BatchNorm2d(128)
+        self.decoder_conv3 = nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
+        self.decoder_batch_norm3 = nn.BatchNorm2d(64)
+        self.decoder_conv4 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1, output_padding=(0,1))
+        self.decoder_batch_norm4 = nn.BatchNorm2d(32)
+        self.decoder_conv5 = nn.ConvTranspose2d(32, 2, kernel_size=4, stride=2, padding=1, output_padding=(1,0))#, output_padding=(1,1)
         
         # instead of unflattening, generate an image for the decoder all pixels in the channels are the same values
         
@@ -60,14 +73,18 @@ class ConvCVAE(nn.Module):
 
         x = F.leaky_relu(self.encoder_conv1(x))
         x = self.max_pool1(x)
+        x = self.encoder_batch_norm1(x)
         x = self.dropout_conv(x)
         x = F.leaky_relu(self.encoder_conv2(x))
         x = self.max_pool2(x)
+        x = self.encoder_batch_norm2(x)
         x = F.leaky_relu(self.encoder_conv3(x))
         x = self.max_pool3(x)
+        x = self.encoder_batch_norm3(x)
         x = self.dropout_conv(x)
         x = F.leaky_relu(self.encoder_conv4(x))
         x = self.max_pool4(x)
+        x = self.encoder_batch_norm4(x)
         x = F.leaky_relu(self.encoder_conv5(x))
 
         x = self.adaptive_pool(x)
@@ -77,9 +94,13 @@ class ConvCVAE(nn.Module):
         logvar = self.encoder_fc_logvar(x)
         return mu, logvar
 
+# patcg discriminwtor
+# mse in the gan
 
+# take out KLD by using CGAN instead, bottleneck sample normal distribution as usual.
+# Discriminator will learn offset of mean. 
     def unFlatten(self, x):
-        return x.reshape(x.shape[0], 256, 16, 26)
+        return x.reshape(x.shape[0], 512, 16, 26)
     
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -89,11 +110,15 @@ class ConvCVAE(nn.Module):
     
     def decoder(self, z):
         xdot = F.leaky_relu(self.decoder_conv1(z))
+        xdot = self.decoder_batch_norm1(xdot)
         xdot = self.dropout_conv(xdot)
         xdot = F.leaky_relu(self.decoder_conv2(xdot))
+        xdot = self.decoder_batch_norm2(xdot)
         xdot = F.leaky_relu(self.decoder_conv3(xdot))
+        xdot = self.decoder_batch_norm3(xdot)
         xdot = self.dropout_conv(xdot)
         xdot = F.leaky_relu(self.decoder_conv4(xdot))
+        xdot = self.decoder_batch_norm4(xdot)
         xdot = self.decoder_conv5(xdot)
         return xdot
     
@@ -105,7 +130,7 @@ class ConvCVAE(nn.Module):
         z = torch.cat((z, labels), dim=1)
 
         z = F.leaky_relu(self.decoder_fc(z))  # shape: [B, 512 * 16 * 26]
-        z = z.view(-1, 256, 16, 26)     # shape: [B, 512, 16, 26]
+        z = z.view(-1, 512, 16, 26)     # shape: [B, 512, 16, 26]
 
         # z = z.unsqueeze(-1).unsqueeze(-1)
         # z = z.repeat(1, 1, 16, 26)
@@ -127,29 +152,35 @@ class ConvCVAE(nn.Module):
         z = torch.cat((z, one_hot_labels), dim=1)
 
         z = F.leaky_relu(self.decoder_fc(z))  # shape: [B, 512 * 16 * 26]
-        z = z.view(-1, 256, 16, 26)     # shape: [B, 512, 16, 26]
+        z = z.view(-1, 512, 16, 26)     # shape: [B, 512, 16, 26]
 
         return self.decoder(z)
 
 
 class ConvCVAEPL(pl.LightningModule):
-    def __init__(self, latent_size = 128, num_classes = 17, device = 'auto', learning_rate = 1e-3, beta = 0.01):
+    def __init__(self, latent_size = 128, num_classes = 17, device = 'auto', learning_rate = 1e-3, beta = 0.01, ramp_beta = True, sample_every = 2):
         super(ConvCVAEPL, self).__init__()
         self.model = ConvCVAE(latent_size, num_classes, device, beta)
         self.learning_rate = learning_rate
         self.beta = beta
+        self.sample_every = sample_every
+        self.ramp_beta = ramp_beta
 
     def on_train_epoch_start(self):
         # Slowly increase beta
-        xshift = 0
-        yamp = 0.1
-        xamp = 0.15
-        max_beta = 2
-        self.beta = torch.minimum(yamp * torch.exp(torch.tensor(xamp * (self.current_epoch - xshift))), torch.tensor(max_beta))
-
-        # ramp_period = 25
-        # amplitude = 0.15
-        # self.beta = float(1 / (1 + torch.exp(torch.tensor(-amplitude * (self.current_epoch - ramp_period)))))
+        if self.ramp_beta:
+            # xshift = 7
+            # yamp = 0.1
+            # xamp = 0.4
+            # max_beta = 2
+            xshift = 11
+            yamp = 0.1
+            xamp = 0.25
+            max_beta = 2
+            self.beta = torch.minimum(yamp * torch.exp(torch.tensor(xamp * (self.current_epoch - xshift))), torch.tensor(max_beta))
+            # ramp_period = 25
+            # amplitude = 0.15
+            # self.beta = float(1 / (1 + torch.exp(torch.tensor(-amplitude * (self.current_epoch - ramp_period)))))
         
         self.model.beta = self.beta
         # self.print(f"Beta = {self.beta:.5f}")
@@ -167,6 +198,7 @@ class ConvCVAEPL(pl.LightningModule):
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         self.log('train_recon', recon, prog_bar=True, on_step=False, on_epoch=True)
         self.log('train_KLD', KLD, prog_bar=True, on_step=False, on_epoch=True)
+        self.log("logvar_mean", logvar.mean(), prog_bar=True, on_step=False, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -201,3 +233,24 @@ class ConvCVAEPL(pl.LightningModule):
                 f"Train Loss: {train_loss:.4f}, Recon: {train_recon:.4f}, KLD: {train_KLD:.4f} "
                 f", Val Loss: {val_loss:.4f}"
             )
+
+        if self.current_epoch % self.sample_every == 0:
+            # sample a random latent vector for a random class
+            label = torch.randint(0, self.model.num_classes, (1,)).to(self.device)
+            z = torch.randn(1, self.model.latent_size).to(self.device)
+            generated_sample = self.model.sample(z, label)
+            
+            D_real_mean = -0.00022800823861055075
+            D_real_std = 3.1135954811248605
+            D_imag_mean = -2.303626924950437e-08
+            D_imag_std = 2.8981973344661305
+            
+            D_real = generated_sample[0][0].cpu().detach().numpy()
+            D_real = (D_real * (D_real_std + 1e-8) * 16) + D_real_mean 
+            D_imag = generated_sample[0][1].cpu().detach().numpy()
+            D_imag = (D_imag * (D_imag_std + 1e-8) * 16) + D_imag_mean
+            
+            D = D_real + 1j * D_imag
+            
+            y = librosa.core.istft(D, hop_length=512, win_length=1024, window='hann')
+            ipd.display(ipd.Audio(y, rate= 44100))
