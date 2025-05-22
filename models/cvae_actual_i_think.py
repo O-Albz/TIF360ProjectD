@@ -252,5 +252,6 @@ class ConvCVAEPL(pl.LightningModule):
             
             D = D_real + 1j * D_imag
             
+            self.print(f"Generated sample for label {label.item()}")
             y = librosa.core.istft(D, hop_length=512, win_length=1024, window='hann')
             ipd.display(ipd.Audio(y, rate= 44100))
