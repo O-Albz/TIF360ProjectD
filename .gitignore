@@ -189,4 +189,4 @@ lightning_logs/
 data/
 
 # mac
-.DS_STORE
+.DS_Store
