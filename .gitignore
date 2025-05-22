@@ -174,8 +174,7 @@ cython_debug/
 .pypirc
 
 
-# mp3
-*.mp3
+# audio
 *.wav
 .fma_small/
 .archive/
