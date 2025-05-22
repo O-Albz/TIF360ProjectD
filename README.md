@@ -42,7 +42,7 @@ TIF360ProjectD/
 ├── notebooks/                 # Jupyter notebook for running the model
 │   └── CVAE_Music_Generation.ipynb
 ├── outputs/                   # Model checkpoints and path to final model
-├── checkpoints/
+│   ├──checkpoints/
 │   └── model_path/
 ├── requirements.txt           # Python dependencies
 ├── README.md                  # Project overview
