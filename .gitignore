@@ -190,3 +190,6 @@ data/
 
 # mac
 .DS_Store
+
+# Other
+models/tes_mod.ipynb
