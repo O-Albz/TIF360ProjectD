@@ -59,6 +59,10 @@ You can run this directly at Kaggle:
 
 Notebook -> [Kaggle](https://www.kaggle.com/code/rasmusmrdberg/cvae-music-generation)
 
+The trained model can be found at Kaggle:
+
+Model -> [Kaggle](https://www.kaggle.com/models/rasmusmrdberg/music_cvae)
+
 ## Datasets
 
 Can be found on Kaggle:
