@@ -64,9 +64,9 @@ You can run this directly at Kaggle:
 
 Can be found on Kaggle:
 
-Spectrograms -> [Insert link]
+Spectrograms -> [Kaggle](https://www.kaggle.com/datasets/oskaralbers/fma-stft-spectrograms)
 
-mp3 -> [Insert link]
+mp3 -> [Kaggle](https://www.kaggle.com/datasets/imsparsh/fma-free-music-archive-small-medium)
 
 ## Conclusions
 
