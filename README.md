@@ -58,7 +58,7 @@ TIF360ProjectD/
 
 You can run this directly at Kaggle:
 
-[Insert link]
+Notebook -> [Kaggle](https://www.kaggle.com/code/rasmusmrdberg/cvae-music-generation)
 
 ## Datasets
 
