@@ -12,20 +12,13 @@ This project explores AI-driven music generation using a **β-Conditional Variat
 
 ---
 
-## Audio Examples
+## Audio Example
 
-Here are some audio samples generated from different regions of the latent space:
-#### Rock
+Here is an example of what the model produces, which is the same for all points in the latent space, for all genres. Posterior collapse...
 
 
 https://github.com/user-attachments/assets/b60f8e11-0635-4334-99db-e0878f605a90
 
-
-#### Pop
-
-#### Classical
-
-#### Jazz
 
 ---
 
@@ -74,5 +67,9 @@ Can be found on Kaggle:
 Spectrograms -> [Insert link]
 
 mp3 -> [Insert link]
+
+## Conclusions
+
+This model is not good enough to synthesize music, would recommend adding a discriminator to the model. Feel free to use this as a start and build upon it.
 
 
